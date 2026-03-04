@@ -1,24 +1,48 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import {
+  Prompt_400Regular,
+  Prompt_700Bold,
+  useFonts,
+} from "@expo-google-fonts/prompt";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [fontsLoaded] = useFonts({
+    Prompt_400Regular,
+    Prompt_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: "#1893da",
+        },
+        headerTitleStyle: {
+          fontFamily: "Prompt_700Bold",
+          fontSize: 20,
+          color: "#fff",
+        },
+        headerTintColor: "#fff", // สีของปุ่มกลับ
+        headerBackButtonDisplayMode: "minimal", // ซ่อนข้อความบนปุ่มกลับ
+        headerTitleAlign: "center", // จัดตำแหน่งหัวข้อให้อยู่ตรงกลาง
+      }}
+    >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="run" options={{ title: "Run Tracker" }} />
+      <Stack.Screen name="add" options={{ title: "เพิ่มรายการวิ่ง" }} />
+      <Stack.Screen name="[id]" options={{ title: "รายละเอียดรายการวิ่ง" }} />
+    </Stack>
   );
 }
