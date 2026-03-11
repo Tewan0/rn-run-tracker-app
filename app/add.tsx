@@ -1,7 +1,11 @@
+import { supabase } from "@/services/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import { decode } from "base64-arraybuffer";
 import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -41,6 +45,48 @@ export default function Add() {
       setImage(result.assets[0].uri);
       setBase64Image(result.assets[0].base64 || null); // เก็บข้อมูล Base64 ของภาพ
     }
+  };
+
+  //ฟังก์ชันบันทึกข้อมูลจากที่ผู้ใช้ป้อน/เลือกไปไว้ที่ supabase
+  const handleSaveToSupabase = async () => {
+    // Validate location, distance, image
+    if (!location || !distance || !image) {
+      Alert.alert("คำเตือน", "กรุณากรอกข้อมูลให้ครบถ้วน");
+      return;
+    }
+
+    //อัปโหลดรูปไปยัง Supabase Storage
+    //ตัวแปรสำหรับเก็บ URL ของรูปที่อัปโหลด
+    let imageUrl = null; // ตัวแปรเก็บ URL ของรูป
+    const fileName = `img_${Date.now()}.jpg`; // สร้างชื่อไฟล์แบบไม่ซ้ำ
+    const { error: uploadError } = await supabase.storage
+      .from("run_bk")
+      .upload(fileName, decode(base64Image!), { contentType: "image/jpeg" });
+
+    if (uploadError) throw uploadError; // ถ้าเกิดข้อผิดพลาดในการอัปโหลด ให้โยนข้อผิดพลาดออกมา
+
+    //เอา url ของรูปที่ storage มากำหนดให้กับตัวแปรเพื่อเอาไปบันทึกในฐานข้อมูล
+    imageUrl = await supabase.storage.from("run_bk").getPublicUrl(fileName).data
+      .publicUrl;
+
+    //บันทึกข้อมูลไปยัง Table ใน Supabase
+    const { error: insertError } = await supabase.from("runs").insert([
+      {
+        location: location,
+        distance: distance,
+        time_of_day: timeOfDay,
+        run_date: new Date().toISOString().split("T")[0], // เก็บเฉพาะวันที่ในรูปแบบ YYYY-MM-DD
+        image_url: imageUrl, // บันทึก URL ของรูปที่อัปโหลด
+      },
+    ]);
+    if (insertError) {
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถบันทึกข้อมูลได้");
+      return;
+    }
+
+    // บันทึกเรียบร้อยแสดงข้อความแจ้ง และเปิดกลับไปหน้า /run
+    Alert.alert("สำเร็จ", "บันทึกข้อมูลเรียบร้อยแล้ว");
+    router.back(); // กลับไปหน้าก่อนหน้า (ซึ่งน่าจะเป็นหน้า /run)
   };
 
   return (
@@ -112,7 +158,10 @@ export default function Add() {
             </View>
           )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.saveButton}>
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={handleSaveToSupabase}
+        >
           <Text
             style={{
               color: "white",
