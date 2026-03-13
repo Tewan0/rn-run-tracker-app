@@ -1,6 +1,7 @@
 //ตั้งค่าการเชื่อมต่อกับ Supabase
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
+import "react-native-url-polyfill/auto";
 
 const supabaseUrl = "https://asppmklalsfcvyamkfae.supabase.co";
 const supabaseAnonKey =

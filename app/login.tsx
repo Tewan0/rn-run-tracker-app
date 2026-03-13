@@ -1,23 +1,46 @@
 import { supabase } from "@/services/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+// แจ้ง WebBrowser ให้เคลียร์ session เก่าที่ค้างอยู่ (ถ้ามี) เพื่อป้องกันปัญหาในการเข้าสู่ระบบด้วย OAuth
+WebBrowser.maybeCompleteAuthSession();
 
 const runing = require("@/assets/images/runing.png");
 
 export default function Login() {
   const handleGoogleLogin = async () => {
-    // เรียกใช้ฟังก์ชันเข้าสู่ระบบด้วย Google ของ Supabase
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: "rnruntrackerapp://run",
-      },
-    });
+    try {
+      // สร้าง URL สำหรับเด้งกลับมาที่แอป
+      const redirectUrl = Linking.createURL("/run", {
+        scheme: "rnruntrackerapp",
+      });
 
-    // สำหรับตอนนี้ให้เปลี่ยนหน้าไปที่หน้าหลักก่อนเพื่อทดสอบ UI
-    router.replace("/run");
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) throw error;
+
+      // ถ้าได้ URL จาก Supabase ให้เปิดหน้าต่างเบราว์เซอร์
+      if (data?.url) {
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      }
+    } catch (error: any) {
+      Alert.alert("เกิดข้อผิดพลาด", error.message);
+    }
   };
 
   return (

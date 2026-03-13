@@ -1,3 +1,4 @@
+import { supabase } from "@/services/supabase";
 import { router } from "expo-router";
 import React, { useEffect } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
@@ -6,11 +7,25 @@ const runing = require("@/assets/images/runing.png");
 
 export default function Index() {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace("/login");
-    }, 3000);
+    const checkSession = async () => {
+      // ดึงข้อมูล Session จาก Supabase
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    return () => clearTimeout(timer);
+      // หน่วงเวลาให้โชว์หน้า Splash Screen 3 วินาที
+      setTimeout(() => {
+        if (session) {
+          // ถ้ามีข้อมูลผู้ใช้แปลว่าเคย Login แล้ว ไปหน้า run ได้เลย
+          router.replace("/run");
+        } else {
+          // ถ้าไม่มีข้อมูล ให้ไปหน้า login
+          router.replace("/login");
+        }
+      }, 3000);
+    };
+
+    checkSession();
   }, []);
 
   return (
