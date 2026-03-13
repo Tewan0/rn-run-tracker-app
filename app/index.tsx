@@ -1,4 +1,4 @@
-import { supabase } from "@/services/supabase";
+import { supabase } from "@/services/supabase"; // เพิ่มการเชื่อมต่อ Supabase
 import { router } from "expo-router";
 import React, { useEffect } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
@@ -7,25 +7,22 @@ const runing = require("@/assets/images/runing.png");
 
 export default function Index() {
   useEffect(() => {
-    const checkSession = async () => {
-      // ดึงข้อมูล Session จาก Supabase
+    const checkUserSession = async () => {
+      // ถาม Supabase ว่ามีใครล็อกอินค้างไว้ไหม
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // หน่วงเวลาให้โชว์หน้า Splash Screen 3 วินาที
       setTimeout(() => {
         if (session) {
-          // ถ้ามีข้อมูลผู้ใช้แปลว่าเคย Login แล้ว ไปหน้า run ได้เลย
-          router.replace("/run");
+          router.replace("/run"); // มีคนล็อกอินแล้ว ไปหน้าหลักเลย
         } else {
-          // ถ้าไม่มีข้อมูล ให้ไปหน้า login
-          router.replace("/login");
+          router.replace("/login"); // ยังไม่มีคนล็อกอิน ไปหน้าเข้าสู่ระบบ
         }
       }, 3000);
     };
 
-    checkSession();
+    checkUserSession();
   }, []);
 
   return (
@@ -49,20 +46,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f0f8ff",
   },
-  image: {
-    width: 200,
-    height: 200,
-    marginBottom: 20,
-  },
+  image: { width: 200, height: 200, marginBottom: 20 },
   title: {
     fontSize: 28,
     fontFamily: "Prompt_700Bold",
     marginBottom: 10,
     color: "#1893da",
   },
-  subtitle: {
-    fontFamily: "Prompt_400Regular",
-    fontSize: 20,
-    color: "#333",
-  },
+  subtitle: { fontFamily: "Prompt_400Regular", fontSize: 20, color: "#333" },
 });
