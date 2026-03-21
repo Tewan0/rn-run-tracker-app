@@ -1,6 +1,6 @@
 import { supabase } from "@/services/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, Stack } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   Alert,
@@ -22,7 +22,18 @@ export default function Run() {
 
   // สร้างฟังก์ชันสำหรับดึงข้อมูลรายการวิ่งจาก Supabase
   const fetchRuns = async () => {
-    const { data, error } = await supabase.from("runs").select("*");
+    // 1. ดึงข้อมูล User ที่ล็อกอินอยู่
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return; // ถ้าไม่มี user ให้หยุดการทำงาน
+
+    // 2. ดึงข้อมูลเฉพาะที่ user_id ตรงกับคนที่ล็อกอิน
+    const { data, error } = await supabase
+      .from("runs")
+      .select("*")
+      .eq("user_id", user.id); // <--- เพิ่ม .eq() เพื่อกรองข้อมูล
+
     if (error) {
       Alert.alert("คำเตือน", "เกิดข้อผิดพลาดในการดึงข้อมูล");
       return;
@@ -71,8 +82,41 @@ export default function Run() {
     </TouchableOpacity>
   );
 
+  // ฟังก์ชันออกจากระบบ
+  const handleLogout = async () => {
+    Alert.alert("ยืนยัน", "คุณต้องการออกจากระบบใช่หรือไม่?", [
+      { text: "ยกเลิก", style: "cancel" },
+      {
+        text: "ออกจากระบบ",
+        style: "destructive",
+        onPress: async () => {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถออกจากระบบได้");
+            return;
+          }
+          // ออกจากระบบสำเร็จ ให้เด้งกลับไปหน้า login
+          router.replace("/login");
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <TouchableOpacity
+              style={styles.headerLogoutButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
+              <Text style={styles.headerLogoutText}>ออกจากระบบ</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
       {/* ส่วนแสดงรูป */}
       <Image source={runing} style={styles.image} />
 
@@ -96,6 +140,18 @@ export default function Run() {
 }
 
 const styles = StyleSheet.create({
+  headerLogoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 5,
+    padding: 5,
+  },
+  headerLogoutText: {
+    fontFamily: "Prompt_400Regular",
+    fontSize: 14,
+    color: "#fff",
+    marginLeft: 4,
+  },
   listPadding: {
     padding: 20,
     paddingBottom: 100, // เว้นที่ให้ FAB
@@ -151,7 +207,7 @@ const styles = StyleSheet.create({
   image: {
     height: 120,
     width: 120,
-    marginTop: 50,
+    marginTop: 20,
     alignSelf: "center",
   },
   container: {
