@@ -1,9 +1,10 @@
 import { supabase } from "@/services/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   StyleSheet,
@@ -12,58 +13,112 @@ import {
   View,
 } from "react-native";
 
-// บังคับเคลียร์ Session เก่าที่ค้างในเบราว์เซอร์
 WebBrowser.maybeCompleteAuthSession();
 
 const runing = require("@/assets/images/runing.png");
 
 export default function Login() {
+  const [loading, setLoading] = useState(false);
+
+  // ฟังก์ชันดึง Token จาก URL แล้ว set session
+  const handleDeepLink = async (url: string) => {
+    console.log("📩 Received URL:", url);
+
+    // รองรับทั้ง fragment (#) และ query string (?)
+    const paramsString = url.includes("#")
+      ? url.split("#")[1]
+      : url.includes("?")
+        ? url.split("?")[1]
+        : "";
+
+    const urlParams = new URLSearchParams(paramsString);
+
+    // กรณี PKCE flow: ได้ code กลับมา
+    const code = urlParams.get("code");
+    if (code) {
+      console.log("🔑 Got auth code, exchanging for session...");
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error("❌ Exchange code error:", error);
+        Alert.alert("ข้อผิดพลาด", error.message);
+      } else {
+        console.log("✅ Login successful (PKCE)!", data.user?.email);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // กรณี Implicit flow: ได้ access_token กลับมา
+    const accessToken = urlParams.get("access_token");
+    const refreshToken = urlParams.get("refresh_token");
+
+    if (accessToken && refreshToken) {
+      console.log("🔑 Got tokens, setting session...");
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) {
+        console.error("❌ Set session error:", error);
+        Alert.alert("ข้อผิดพลาด", error.message);
+      } else {
+        console.log("✅ Login successful (Implicit)!");
+      }
+    } else {
+      console.warn("⚠️ No tokens or code in URL");
+    }
+    setLoading(false);
+  };
+
+  // Listener จับ deep link ที่กลับมาจากเบราว์เซอร์
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", (event) => {
+      console.log("🔗 Deep link event:", event.url);
+      handleDeepLink(event.url);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   const handleGoogleLogin = async () => {
     try {
-      // สร้าง URI สําหรับเข้าสู่ระบบด้วย Google
-      const redirectUri = makeRedirectUri();
+      setLoading(true);
 
-      console.log("Redirect URI:", redirectUri); // ตรวจสอบ URI ที่สร้างขึ้น
+      const redirectUri = Linking.createURL("/");
+      console.log("=============================================");
+      console.log("🔑 Redirect URI:", redirectUri);
+      console.log("=============================================");
 
-      // เริ่มกระบวนการเข้าสู่ระบบด้วย Google ผ่าน Supabase
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: redirectUri, // ใช้ URI ที่สร้างขึ้น
-          skipBrowserRedirect: true, // ป้องกันการรีไดเรกต์อัตโนมัติในเบราว์เซอร์
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
         },
       });
 
-      if (error) throw error; // ตรวจสอบข้อผิดพลาดในการเข้าสู่ระบบ
-      if (data?.url) {
-        // เปิด URL ที่ได้รับจาก Supabase ในเบราว์เซอร์
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri,
-        );
-        // ตรวจสอบผลลัพธ์จากการเปิดเบราว์เซอร์
-        if (result.type === "success") {
-          // การเข้าสู่ระบบสำเร็จ
-          console.log("Login successful!");
-
-          // ตรวจสอบ URL ที่ได้รับจาก Supabase หลังจากการเข้าสู่ระบบ
-          const urlParams = new URLSearchParams(result.url.split("#")[1]);
-          const accessToken = urlParams.get("access_token");
-          const refreshToken = urlParams.get("refresh_token");
-
-          // บันทึก token ใน Supabase client
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            console.log("Tokens set in Supabase client");
-          } else {
-            console.warn("No tokens found in URL");
-          }
-        }
+      if (error) {
+        setLoading(false);
+        throw error;
       }
+
+      if (!data?.url) {
+        setLoading(false);
+        Alert.alert("ข้อผิดพลาด", "ไม่ได้รับ URL จาก Supabase");
+        return;
+      }
+
+      console.log("🌐 Opening auth URL...");
+
+      // ใช้ Linking.openURL เปิด System Browser แทน Custom Chrome Tab
+      // เพราะ System Browser รองรับ deep link (exp://) ได้ดีกว่า
+      await Linking.openURL(data.url);
+
+      // หมายเหตุ: หลังจาก Login สำเร็จในเบราว์เซอร์
+      // เบราว์เซอร์จะ redirect มาที่ exp://... -> Expo Go จะเปิดขึ้นมาอัตโนมัติ
+      // แล้ว useEffect ข้างบนจะจับ URL และ set session ให้
     } catch (error) {
+      setLoading(false);
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเข้าสู่ระบบด้วย Google ได้");
       console.error("Google Login Error:", error);
     }
@@ -81,16 +136,23 @@ export default function Login() {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.googleButton}
+          style={[styles.googleButton, loading && styles.googleButtonDisabled]}
           onPress={handleGoogleLogin}
+          disabled={loading}
         >
-          <Ionicons
-            name="logo-google"
-            size={24}
-            color="#fff"
-            style={{ marginRight: 10 }}
-          />
-          <Text style={styles.buttonText}>เข้าสู่ระบบด้วย Google</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />
+          ) : (
+            <Ionicons
+              name="logo-google"
+              size={24}
+              color="#fff"
+              style={{ marginRight: 10 }}
+            />
+          )}
+          <Text style={styles.buttonText}>
+            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบด้วย Google"}
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.note}>
@@ -130,6 +192,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
+  },
+  googleButtonDisabled: {
+    opacity: 0.7,
   },
   buttonText: { color: "#fff", fontFamily: "Prompt_700Bold", fontSize: 16 },
   note: {
